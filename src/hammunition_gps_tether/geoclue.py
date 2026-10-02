@@ -31,7 +31,7 @@ HEADER = "# Written by `hammunition hardware apply` (D-069)."
 def configured() -> bool:
     """Whether the engine has told GeoClue to read the tether's socket."""
     try:
-        text = Path(DROPIN).read_text(encoding="utf-8")
+        text = Path(DROPIN).read_text(encoding="utf-8", errors="replace")
     except (FileNotFoundError, NotADirectoryError, PermissionError):
         return False
     return text.startswith(HEADER)

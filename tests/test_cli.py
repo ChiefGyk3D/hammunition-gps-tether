@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import socket
+import time
 from pathlib import Path
 
 import pytest
@@ -305,8 +306,48 @@ def test_both_socket_options_at_once_are_refused(
     assert "--no-nmea-socket" in capsys.readouterr().err
 
 
-def test_sigterm_stops_it_like_ctrl_c() -> None:
-    """systemd stops a service with SIGTERM; the handler must raise what Ctrl-C raises,
-    so the `finally` that removes the unix socket runs."""
-    with pytest.raises(KeyboardInterrupt):
-        cli._term(15, None)
+def test_sigterm_stops_the_real_program_cleanly_and_removes_the_socket(short_dir: Path) -> None:
+    """systemd stops a service with SIGTERM: exit 0, the unix socket gone, no traceback."""
+    import signal
+    import subprocess
+    import sys
+
+    def spare() -> int:
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            return int(probe.getsockname()[1])
+
+    path = short_dir / "nmea.sock"
+    root = Path(__file__).resolve().parent.parent
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "hammunition_gps_tether",
+            "--port",
+            str(spare()),
+            "--position-port",
+            str(spare()),
+            "--nmea-socket",
+            str(path),
+        ],
+        env={"PYTHONPATH": str(root / "src")},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        for _ in range(250):
+            if path.exists():
+                break
+            time.sleep(0.02)
+        assert path.exists(), "the tether never made its socket"
+        time.sleep(0.2)  # inside serve(), where a SIGTERM held back since startup is let in
+        proc.send_signal(signal.SIGTERM)
+        out, err = proc.communicate(timeout=10)
+    finally:
+        proc.kill()
+    assert proc.returncode == 0, err
+    assert "Traceback" not in err and "Stopped." in err
+    assert not path.exists()
+    assert "port" in out

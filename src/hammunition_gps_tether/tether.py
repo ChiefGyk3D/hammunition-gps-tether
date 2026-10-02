@@ -33,7 +33,8 @@ so every client gets the same bytes and gpsd is not watched while nobody
 listens. A client that stops reading is dropped alone. It runs as the
 operator, never as root: in a terminal until Ctrl-C, or as the user service
 ``systemd/hammunition-gps-tether.service`` this project ships (the engine
-installs it); either way it is the standard library only. Navit needs none of this: it reads gpsd itself.
+installs it); either way it is the standard library only. Navit needs none of
+this: it reads gpsd itself.
 
 With ``--nmea-socket PATH`` (D-069) it also listens on a unix stream socket,
 mode 0660, in the group GeoClue runs as, and serves it exactly what it serves

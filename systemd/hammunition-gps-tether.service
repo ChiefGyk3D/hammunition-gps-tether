@@ -12,6 +12,8 @@ Type=simple
 ExecStart=%h/.local/bin/hammunition-gps-tether
 Restart=on-failure
 RestartSec=5
+# Exit 1 is a refusal (port taken, bad option): retrying every 5 s cannot fix it.
+RestartPreventExitStatus=1
 
 [Install]
 WantedBy=default.target

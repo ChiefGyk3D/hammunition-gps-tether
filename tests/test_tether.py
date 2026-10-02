@@ -799,20 +799,6 @@ def test_stopping_closes_every_client_and_the_gpsd_watch() -> None:
 # ---------------------------------------------------------------- the unix socket (D-069)
 
 
-@pytest.fixture
-def short_dir() -> Iterator[Path]:
-    """A directory with a short path: AF_UNIX allows 107 bytes, and pytest's
-    tmp_path can be longer than that. Removed afterwards."""
-    import shutil
-    import tempfile
-
-    where = Path(tempfile.mkdtemp(prefix="hgt-"))
-    try:
-        yield where
-    finally:
-        shutil.rmtree(where, ignore_errors=True)
-
-
 def _my_group() -> str:
     import grp
     import os

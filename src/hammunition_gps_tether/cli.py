@@ -106,6 +106,7 @@ def run(args: argparse.Namespace) -> int:
     )
 
     try:
+        _accept_sigterm()
         tether.serve(
             listener, http=http, unix=None if unix is None else unix[0], gpsd=gpsd, log=log
         )
@@ -163,12 +164,25 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _term(signum: int, frame: object) -> None:
-    """SIGTERM (systemd's stop) ends the tether like Ctrl-C: socket removed, exit 0."""
+    """SIGTERM (systemd's stop) ends the tether like Ctrl-C: socket removed, exit 0.
+
+    A second SIGTERM during the cleanup is ignored, so the cleanup finishes.
+    """
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
     raise KeyboardInterrupt
+
+
+def _accept_sigterm() -> None:
+    """Let a SIGTERM held back since startup arrive, now that the ``try`` that cleans up is open."""
+    signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if threading.current_thread() is threading.main_thread():
+        # Held back until `run` is inside the try that closes what it opened: a
+        # SIGTERM during startup then stops the tether cleanly instead of
+        # tracebacking past an open socket.
+        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
         signal.signal(signal.SIGTERM, _term)
     return run(args)

@@ -16,7 +16,9 @@ exist unless a test makes it.
 
 from __future__ import annotations
 
+import shutil
 import socket
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -70,3 +72,14 @@ def geoclue_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     for name in ("DROPIN", "TMPFILES", "SOCKET"):
         monkeypatch.setattr(geoclue, name, str(root) + getattr(geoclue, name))
     return root
+
+
+@pytest.fixture
+def short_dir() -> Iterator[Path]:
+    """A directory with a short path: AF_UNIX allows 107 bytes, and pytest's
+    tmp_path can be longer than that. Removed afterwards."""
+    where = Path(tempfile.mkdtemp(prefix="hgt-"))
+    try:
+        yield where
+    finally:
+        shutil.rmtree(where, ignore_errors=True)
