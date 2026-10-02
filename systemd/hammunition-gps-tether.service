@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright (C) 2026 Renegade Penguin LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# A user unit: `systemctl --user enable --now hammunition-gps-tether.service`.
+# It serves gpsd's position on 127.0.0.1:10110 (NMEA) and :10111 (/position),
+# and cannot share 10110 with a tether started by hand.
+[Unit]
+Description=Hammunition GPS tether: gpsd's position as NMEA on 127.0.0.1
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/hammunition-gps-tether
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

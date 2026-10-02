@@ -1,0 +1,312 @@
+# SPDX-FileCopyrightText: Copyright (C) 2026 Renegade Penguin LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""The ``hammunition-gps-tether`` command: options, refusals, the GeoClue socket.
+
+Moved from the engine's ``tests/test_maps_tools.py``; every listener is a
+stand-in or a loopback socket on a random port.
+"""
+
+from __future__ import annotations
+
+import os
+import socket
+from pathlib import Path
+
+import pytest
+
+from hammunition_gps_tether import cli
+
+
+def _tether_calls(
+    monkeypatch: pytest.MonkeyPatch, *, fail: BaseException | None = None
+) -> list[str]:
+    """Stand-ins for the listener and the server; no socket is opened."""
+
+    import hammunition_gps_tether.tether as tether
+
+    calls: list[str] = []
+
+    class Listener:
+        def close(self) -> None:
+            calls.append("closed")
+
+    def listen(port: int = tether.PORT) -> socket.socket:
+        calls.append(f"listen {port}")
+        if isinstance(fail, OSError):
+            raise fail
+        return Listener()  # type: ignore[return-value]
+
+    def serve(listener: object, **kwargs: object) -> None:
+        gpsd = kwargs.get("gpsd", tether.GPSD)
+        calls.append("serve" if gpsd == tether.GPSD else f"serve gpsd {gpsd}")
+        if fail is not None:
+            raise fail
+
+    monkeypatch.setattr(tether, "listen", listen)
+    monkeypatch.setattr(tether, "serve", serve)
+    return calls
+
+
+def test_gps_tether_prints_where_to_connect_and_serves_until_ctrl_c(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(os, "geteuid", lambda: 1000)
+    calls = _tether_calls(monkeypatch, fail=KeyboardInterrupt())
+    assert cli.main([]) == cli.EXIT_OK
+    assert calls == ["listen 10110", "listen 10111", "serve", "closed", "closed"]
+    out = capsys.readouterr().out
+    assert "host 127.0.0.1, port 10110" in out
+    assert "http://127.0.0.1:10111/position" in out
+
+
+def test_gps_tether_names_a_port_already_in_use(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import errno
+
+    monkeypatch.setattr(os, "geteuid", lambda: 1000)
+    calls = _tether_calls(monkeypatch, fail=OSError(errno.EADDRINUSE, "Address already in use"))
+    assert cli.main([]) == cli.EXIT_FAILED
+    assert calls == ["listen 10110"]
+    err = capsys.readouterr().err
+    assert "Address already in use" in err and "127.0.0.1 port 10110" in err
+
+
+def test_gps_tether_refuses_root(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    calls = _tether_calls(monkeypatch)
+    assert cli.main([]) == cli.EXIT_FAILED
+    assert calls == []
+    assert "not as root" in capsys.readouterr().err
+
+
+def test_gps_tether_takes_another_port_and_a_remote_gpsd(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(os, "geteuid", lambda: 1000)
+    calls = _tether_calls(monkeypatch, fail=KeyboardInterrupt())
+    argv = ["--port", "10112", "--gpsd", "[2001:db8::7]:3000"]
+    assert cli.main(argv) == cli.EXIT_OK
+    assert calls == [
+        "listen 10112",
+        "listen 10111",
+        "serve gpsd ('2001:db8::7', 3000)",
+        "closed",
+        "closed",
+    ]
+    out = capsys.readouterr().out
+    assert "host 127.0.0.1, port 10112" in out
+    assert "gpsd at [2001:db8::7] port 3000" in out
+
+
+@pytest.mark.parametrize(
+    ("argv", "words"),
+    [
+        (["--port", "1023"], "--port 1023"),
+        (["--port", "65536"], "--port 65536"),
+        (["--port", "ten"], "--port ten"),
+        (["--gpsd", "::1"], "in brackets"),
+        (["--gpsd", "pi.local:0"], "1 to 65535"),
+        (["--gpsd", ""], "needs a host"),
+        (["--position-port", "80"], "--position-port 80"),
+        (["--port", "10111"], "are the same port"),
+    ],
+)
+def test_gps_tether_refuses_a_bad_option_by_name_and_opens_nothing(
+    argv: list[str],
+    words: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(os, "geteuid", lambda: 1000)
+    calls = _tether_calls(monkeypatch)
+    assert cli.main([*argv]) == cli.EXIT_FAILED
+    assert calls == []
+    assert words in capsys.readouterr().err
+
+
+def test_gps_tether_reaches_a_fake_gpsd_through_the_gpsd_option(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The whole command, end to end: a fake gpsd on a random loopback port
+    named with --gpsd, the tether on a spare --port, a real client."""
+    import socket
+    import threading
+    import time
+
+    import hammunition_gps_tether.tether as tether
+    from tests.test_tether import FIX_3D, FakeGpsd, _json
+
+    monkeypatch.setattr(os, "geteuid", lambda: 1000)
+    gpsd = FakeGpsd(_json({"class": "VERSION"}, FIX_3D), repeat=True)
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    stop = threading.Event()
+    real_serve = tether.serve
+    bound: list[tuple[str, int]] = []
+
+    def serve(listener: socket.socket, **kwargs: object) -> None:
+        bound.append(listener.getsockname())
+        real_serve(listener, stop=stop, poll=0.02, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(tether, "serve", serve)
+    argv = ["--gpsd", f"127.0.0.1:{gpsd.address[1]}", "--port", str(port)]
+    result: list[int] = []
+    thread = threading.Thread(target=lambda: result.append(cli.main(argv)), daemon=True)
+    thread.start()
+    try:
+        for _ in range(250):
+            if bound:
+                break
+            time.sleep(0.02)
+        assert bound == [("127.0.0.1", port)], "still loopback only"
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
+            assert client.makefile("rb").readline().startswith(b"$GPRMC,140509.25,A,")
+    finally:
+        stop.set()
+        thread.join(timeout=5)
+        gpsd.close()
+    assert result == [cli.EXIT_OK]
+    assert gpsd.received == [tether.WATCH]
+    assert f"gpsd at 127.0.0.1 port {gpsd.address[1]}" in capsys.readouterr().out
+
+
+def _socket_calls(
+    monkeypatch: pytest.MonkeyPatch, *, unix_fails: BaseException | None = None
+) -> list[str]:
+    """Stand-ins for both listeners, the server and the socket's removal."""
+
+    import hammunition_gps_tether.tether as tether
+
+    calls: list[str] = []
+
+    class Listener:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def close(self) -> None:
+            calls.append(f"closed {self.name}")
+
+    def listen(port: int = tether.PORT) -> socket.socket:
+        calls.append(f"listen {port}")
+        return Listener(str(port))  # type: ignore[return-value]
+
+    def listen_unix(path: str, **kwargs: object) -> tuple[socket.socket, tuple[int, int]]:
+        calls.append(f"listen_unix {path}")
+        if unix_fails is not None:
+            raise unix_fails
+        return Listener("unix"), (1, 2)  # type: ignore[return-value]
+
+    def close_unix(listener: object, path: str, identity: tuple[int, int]) -> None:
+        calls.append(f"close_unix {path} {identity}")
+
+    def serve(listener: object, **kwargs: object) -> None:
+        calls.append("serve with unix" if kwargs.get("unix") is not None else "serve")
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(tether, "listen", listen)
+    monkeypatch.setattr(tether, "listen_unix", listen_unix)
+    monkeypatch.setattr(tether, "close_unix", close_unix)
+    monkeypatch.setattr(tether, "serve", serve)
+    monkeypatch.setattr(os, "geteuid", lambda: 1000)
+    return calls
+
+
+def _our_dropin() -> None:
+    from hammunition_gps_tether import geoclue
+
+    Path(geoclue.DROPIN).parent.mkdir(parents=True)
+    Path(geoclue.DROPIN).write_text(geoclue.HEADER + "\n")
+
+
+def test_without_the_geoclue_files_no_socket_is_served(
+    monkeypatch: pytest.MonkeyPatch, geoclue_files: Path
+) -> None:
+    calls = _socket_calls(monkeypatch)
+    assert cli.main([]) == cli.EXIT_OK
+    assert not any("unix" in call for call in calls)
+
+
+def test_with_the_geoclue_files_the_socket_is_served_by_default(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], geoclue_files: Path
+) -> None:
+    """The launcher runs `hammunition-gps-tether` with no option; the
+    drop-in's presence is what turns the socket on, so the menu entry needs no
+    second form."""
+    from hammunition_gps_tether import geoclue
+
+    _our_dropin()
+    calls = _socket_calls(monkeypatch)
+    assert cli.main([]) == cli.EXIT_OK
+    assert calls == [
+        "listen 10110",
+        "listen 10111",
+        f"listen_unix {geoclue.SOCKET}",
+        "serve with unix",
+        "closed 10110",
+        "closed 10111",
+        f"close_unix {geoclue.SOCKET} (1, 2)",
+    ]
+    assert geoclue.SOCKET in capsys.readouterr().out
+
+
+def test_no_nmea_socket_leaves_it_off_with_the_files_in_place(
+    monkeypatch: pytest.MonkeyPatch, geoclue_files: Path
+) -> None:
+    _our_dropin()
+    calls = _socket_calls(monkeypatch)
+    assert cli.main(["--no-nmea-socket"]) == cli.EXIT_OK
+    assert not any("unix" in call for call in calls)
+
+
+def test_an_explicit_socket_is_served_without_the_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls = _socket_calls(monkeypatch)
+    path = str(tmp_path / "n.sock")
+    assert cli.main(["--nmea-socket", path]) == cli.EXIT_OK
+    assert f"listen_unix {path}" in calls and "serve with unix" in calls
+
+
+def test_an_explicit_socket_that_cannot_be_made_stops_the_tether(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    calls = _socket_calls(monkeypatch, unix_fails=FileNotFoundError(2, "No such file or directory"))
+    path = str(tmp_path / "missing" / "n.sock")
+    assert cli.main(["--nmea-socket", path]) == cli.EXIT_FAILED
+    assert "serve" not in " ".join(calls)
+    assert "closed 10110" in calls and "closed 10111" in calls
+    assert path in capsys.readouterr().err
+
+
+def test_the_default_socket_failing_is_a_note_and_tcp_still_serves(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], geoclue_files: Path
+) -> None:
+    """After a reboot before systemd-tmpfiles ran, say: QMapShack keeps working."""
+    _our_dropin()
+    calls = _socket_calls(monkeypatch, unix_fails=FileNotFoundError(2, "No such file or directory"))
+    assert cli.main([]) == cli.EXIT_OK
+    assert "serve" in calls
+    err = capsys.readouterr().err
+    assert "systemd-tmpfiles --create" in err and "GeoClue" in err
+
+
+def test_both_socket_options_at_once_are_refused(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = _socket_calls(monkeypatch)
+    argv = ["--nmea-socket", "/x/n.sock", "--no-nmea-socket"]
+    assert cli.main(argv) == cli.EXIT_FAILED
+    assert calls == []
+    assert "--no-nmea-socket" in capsys.readouterr().err
+
+
+def test_sigterm_stops_it_like_ctrl_c() -> None:
+    """systemd stops a service with SIGTERM; the handler must raise what Ctrl-C raises,
+    so the `finally` that removes the unix socket runs."""
+    with pytest.raises(KeyboardInterrupt):
+        cli._term(15, None)

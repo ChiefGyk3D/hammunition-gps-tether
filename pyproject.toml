@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hammunition-gps-tether"
+dynamic = ["version"]
+description = "Serves gpsd's position as NMEA on 127.0.0.1 for QMapShack, the browser map and GeoClue"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "ChiefGyk3D" }]
+keywords = ["ham-radio", "gps", "gpsd", "nmea", "qmapshack"]
+# Standard library only: the tether is a small server and needs nothing else.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "mypy>=1.10", "ruff>=0.5"]
+
+[project.scripts]
+hammunition-gps-tether = "hammunition_gps_tether.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ChiefGyk3D/hammunition-gps-tether"
+Engine = "https://github.com/ChiefGyk3D/Hammunition"
+
+[tool.setuptools.dynamic]
+version = { attr = "hammunition_gps_tether.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hammunition_gps_tether = ["py.typed"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests"]
+warn_unreachable = true
+show_error_codes = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "S", "RUF"]
+ignore = [
+    "E501",  # line length is the formatter's
+    "SIM300",  # "Yoda" misfires on a constant compared with a literal
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/hammunition_gps_tether/tether.py" = ["S101"]  # asserts narrow Optional types for mypy
+"tests/*" = ["S101", "S603", "S607", "S108", "S104"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+addopts = "-q --strict-markers"

@@ -1,0 +1,10 @@
+# Anchored to the repository root unless noted. A trailing slash anchors nothing.
+__pycache__/
+*.py[cod]
+/.venv
+/src/*.egg-info
+/build
+/dist
+/.pytest_cache
+/.mypy_cache
+/.ruff_cache
