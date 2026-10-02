@@ -8,6 +8,12 @@ SPDX-License-Identifier: GPL-3.0-or-later
 Notable changes, newest first. Versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Clarify the README's pip/pipx service and Hammunition engine install paths.
+
 ## [0.1.0] - 2026-10-01
 
 ### Added

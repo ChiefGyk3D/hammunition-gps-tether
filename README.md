@@ -48,7 +48,8 @@ host `127.0.0.1`, port `10110`.
 
 `systemd/hammunition-gps-tether.service` is a user unit (`Restart=on-failure`,
 started at login). It runs `%h/.local/bin/hammunition-gps-tether`, where
-`pipx install` or `pip install --user` puts the program.
+`pipx install` or `pip install --user` puts the program. This unit is for a
+pip/pipx installation; the engine's install does not use it.
 
 ```
 make install-user
@@ -61,13 +62,23 @@ port 10110. A stop (SIGTERM) removes the unix socket, as Ctrl-C does.
 
 ## How the engine installs it
 
-Hammunition's catalog carries a `gps-tether` unit: a build from this repository's
-pinned tag, with the user unit rendered into `~/.config/systemd/user/`, enabled on
-install and removed on uninstall. `hammunition maps gps-tether` and the QMapShack
-launcher call the installed program. The root-owned GeoClue files (a `conf.d`
-drop-in and a tmpfiles line for the socket's directory) are written by
-`hammunition hardware apply`, not by this program, which only reads the drop-in to
-decide whether the socket is on by default.
+Hammunition's catalog installs the sha256-pinned tag tarball as a binary source
+tree at `/usr/local/share/hammunition/gps-tether`; nothing is built or installed
+with pip. It runs in place with
+`/usr/bin/env PYTHONPATH=/usr/local/share/hammunition/gps-tether/src /usr/bin/python3 -P -m hammunition_gps_tether`.
+The engine renders its own `hammunition-gps-tether.service` user unit in
+`~/.config/systemd/user/` with that `ExecStart`; it has the same name as this
+repository's unit and also listens on port 10110, so use one installation, not
+both. The engine's install enables its unit but does not start it: it starts at
+the next login, or now with
+`systemctl --user start hammunition-gps-tether.service`. The install also writes
+a mode-0600 row to `~/.config/hammunition/devctl-services.yaml`, the service
+list used by `hammunition services` and the tray. `hammunition maps gps-tether`
+runs the installed tree (or a pip-installed executable); if neither is present,
+it refuses and points to `hammunition install gps-tether`. The root-owned
+GeoClue files (a `conf.d` drop-in and a tmpfiles line for the socket's
+directory) are written by `hammunition hardware apply`, not by this program,
+which only reads the drop-in to decide whether the socket is on by default.
 
 ## Develop
 
