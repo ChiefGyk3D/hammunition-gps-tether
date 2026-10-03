@@ -13,7 +13,6 @@ import os
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -405,8 +404,8 @@ def test_a_position_port_really_in_use_exits_3() -> None:
     assert "position" in done.stderr and "Traceback" not in done.stderr
 
 
-def test_a_live_unix_socket_exits_3() -> None:
-    short = Path(tempfile.mkdtemp(prefix="gt")) / "n.sock"
+def test_a_live_unix_socket_exits_3(short_dir: Path) -> None:
+    short = short_dir / "n.sock"
     with socket.socket(socket.AF_UNIX) as held:
         held.bind(str(short))
         held.listen(1)
@@ -419,9 +418,8 @@ def test_a_live_unix_socket_exits_3() -> None:
         done = _run_cli(
             "--port", str(free), "--position-port", str(free2), "--nmea-socket", str(short)
         )
-    short.unlink(missing_ok=True)
     assert done.returncode == 3, done.stderr
-    assert "Traceback" not in done.stderr
+    assert "another tether" in done.stderr and "Traceback" not in done.stderr
 
 
 def test_a_bad_gpsd_spec_exits_3() -> None:
