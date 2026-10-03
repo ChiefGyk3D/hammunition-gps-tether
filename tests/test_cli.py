@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import os
 import socket
+import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -68,7 +71,7 @@ def test_gps_tether_names_a_port_already_in_use(
 
     monkeypatch.setattr(os, "geteuid", lambda: 1000)
     calls = _tether_calls(monkeypatch, fail=OSError(errno.EADDRINUSE, "Address already in use"))
-    assert cli.main([]) == cli.EXIT_FAILED
+    assert cli.main([]) == 3
     assert calls == ["listen 10110"]
     err = capsys.readouterr().err
     assert "Address already in use" in err and "127.0.0.1 port 10110" in err
@@ -79,7 +82,7 @@ def test_gps_tether_refuses_root(
 ) -> None:
     monkeypatch.setattr(os, "geteuid", lambda: 0)
     calls = _tether_calls(monkeypatch)
-    assert cli.main([]) == cli.EXIT_FAILED
+    assert cli.main([]) == 3
     assert calls == []
     assert "not as root" in capsys.readouterr().err
 
@@ -124,7 +127,7 @@ def test_gps_tether_refuses_a_bad_option_by_name_and_opens_nothing(
 ) -> None:
     monkeypatch.setattr(os, "geteuid", lambda: 1000)
     calls = _tether_calls(monkeypatch)
-    assert cli.main([*argv]) == cli.EXIT_FAILED
+    assert cli.main([*argv]) == 3
     assert calls == []
     assert words in capsys.readouterr().err
 
@@ -146,6 +149,9 @@ def test_gps_tether_reaches_a_fake_gpsd_through_the_gpsd_option(
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        position_port = probe.getsockname()[1]  # not 10111: a live tether may hold it
     stop = threading.Event()
     real_serve = tether.serve
     bound: list[tuple[str, int]] = []
@@ -156,6 +162,7 @@ def test_gps_tether_reaches_a_fake_gpsd_through_the_gpsd_option(
 
     monkeypatch.setattr(tether, "serve", serve)
     argv = ["--gpsd", f"127.0.0.1:{gpsd.address[1]}", "--port", str(port)]
+    argv += ["--position-port", str(position_port), "--no-nmea-socket"]
     result: list[int] = []
     thread = threading.Thread(target=lambda: result.append(cli.main(argv)), daemon=True)
     thread.start()
@@ -278,7 +285,7 @@ def test_an_explicit_socket_that_cannot_be_made_stops_the_tether(
 ) -> None:
     calls = _socket_calls(monkeypatch, unix_fails=FileNotFoundError(2, "No such file or directory"))
     path = str(tmp_path / "missing" / "n.sock")
-    assert cli.main(["--nmea-socket", path]) == cli.EXIT_FAILED
+    assert cli.main(["--nmea-socket", path]) == 3
     assert "serve" not in " ".join(calls)
     assert "closed 10110" in calls and "closed 10111" in calls
     assert path in capsys.readouterr().err
@@ -301,7 +308,7 @@ def test_both_socket_options_at_once_are_refused(
 ) -> None:
     calls = _socket_calls(monkeypatch)
     argv = ["--nmea-socket", "/x/n.sock", "--no-nmea-socket"]
-    assert cli.main(argv) == cli.EXIT_FAILED
+    assert cli.main(argv) == 3
     assert calls == []
     assert "--no-nmea-socket" in capsys.readouterr().err
 
@@ -351,3 +358,97 @@ def test_sigterm_stops_the_real_program_cleanly_and_removes_the_socket(short_dir
     assert "Traceback" not in err and "Stopped." in err
     assert not path.exists()
     assert "port" in out
+
+
+# The exit codes a unit's RestartPreventExitStatus=3 reads: 0 stopped cleanly,
+# 1 an uncaught crash (retried), 2 usage (argparse's own), 3 a refusal (not retried).
+
+
+def _run_cli(*argv: str, prelude: str = "") -> subprocess.CompletedProcess[str]:
+    root = Path(__file__).resolve().parent.parent
+    code = f"import sys\n{prelude}\nfrom hammunition_gps_tether import cli\nsys.exit(cli.main(sys.argv[1:]))\n"
+    return subprocess.run(
+        [sys.executable, "-c", code, *argv],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={"PYTHONPATH": str(root / "src"), "PATH": os.environ.get("PATH", "")},
+    )
+
+
+def test_the_refusal_code_is_three() -> None:
+    assert cli.EXIT_REFUSED == 3
+    assert cli.EXIT_OK == 0
+
+
+def test_a_port_really_in_use_exits_3_with_one_line() -> None:
+    with socket.socket() as held:
+        held.bind(("127.0.0.1", 0))
+        held.listen(1)
+        port = held.getsockname()[1]
+        done = _run_cli("--port", str(port), "--no-nmea-socket")
+    assert done.returncode == 3, done.stderr
+    assert len(done.stderr.strip().splitlines()) == 1
+    assert "cannot listen" in done.stderr and "Traceback" not in done.stderr
+
+
+def test_a_position_port_really_in_use_exits_3() -> None:
+    with socket.socket() as held:
+        held.bind(("127.0.0.1", 0))
+        held.listen(1)
+        taken = held.getsockname()[1]
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            free = probe.getsockname()[1]
+        done = _run_cli("--port", str(free), "--position-port", str(taken), "--no-nmea-socket")
+    assert done.returncode == 3, done.stderr
+    assert "position" in done.stderr and "Traceback" not in done.stderr
+
+
+def test_a_live_unix_socket_exits_3() -> None:
+    short = Path(tempfile.mkdtemp(prefix="gt")) / "n.sock"
+    with socket.socket(socket.AF_UNIX) as held:
+        held.bind(str(short))
+        held.listen(1)
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            free = probe.getsockname()[1]
+        with socket.socket() as probe2:
+            probe2.bind(("127.0.0.1", 0))
+            free2 = probe2.getsockname()[1]
+        done = _run_cli(
+            "--port", str(free), "--position-port", str(free2), "--nmea-socket", str(short)
+        )
+    short.unlink(missing_ok=True)
+    assert done.returncode == 3, done.stderr
+    assert "Traceback" not in done.stderr
+
+
+def test_a_bad_gpsd_spec_exits_3() -> None:
+    done = _run_cli("--gpsd", "::1")
+    assert done.returncode == 3 and "in brackets" in done.stderr
+
+
+def test_an_unknown_flag_keeps_argparses_exit_2() -> None:
+    done = _run_cli("--no-such-flag")
+    assert done.returncode == 2 and "usage:" in done.stderr
+
+
+def test_an_uncaught_crash_exits_1_so_the_unit_retries_it() -> None:
+    prelude = (
+        "import os\n"
+        "os.geteuid = lambda: 1000\n"
+        "import hammunition_gps_tether.tether as t\n"
+        "def boom(*a, **k):\n    raise RuntimeError('bug')\n"
+        "t.serve = boom\n"
+    )
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        free = probe.getsockname()[1]
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        free2 = probe.getsockname()[1]
+    done = _run_cli(
+        "--port", str(free), "--position-port", str(free2), "--no-nmea-socket", prelude=prelude
+    )
+    assert done.returncode == 1 and "RuntimeError: bug" in done.stderr

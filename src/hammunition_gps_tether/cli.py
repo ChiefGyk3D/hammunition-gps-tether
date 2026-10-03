@@ -20,7 +20,11 @@ from collections.abc import Sequence
 from hammunition_gps_tether import __version__, geoclue, tether
 
 EXIT_OK = 0
-EXIT_FAILED = 1
+# A refusal: the tether was asked for something it will not or cannot do (a taken
+# port or socket, root, an unusable --gpsd or option value). Retrying cannot fix
+# it, so the user unit's RestartPreventExitStatus names 3. An uncaught exception
+# exits 1 (Python's own) and is retried; argparse's usage error is 2.
+EXIT_REFUSED = 3
 
 
 def run(args: argparse.Namespace) -> int:
@@ -44,13 +48,13 @@ def run(args: argparse.Namespace) -> int:
             raise ValueError("--nmea-socket and --no-nmea-socket ask for opposite things")
     except ValueError as exc:
         print(f"error: {exc}.", file=sys.stderr)
-        return EXIT_FAILED
+        return EXIT_REFUSED
     if os.geteuid() == 0:
         print(
             "error: the GPS tether reads gpsd as any user can; run it as yourself, not as root.",
             file=sys.stderr,
         )
-        return EXIT_FAILED
+        return EXIT_REFUSED
     try:
         listener = tether.listen(port)
     except OSError as exc:
@@ -60,7 +64,7 @@ def run(args: argparse.Namespace) -> int:
             f"--port N serves another port.",
             file=sys.stderr,
         )
-        return EXIT_FAILED
+        return EXIT_REFUSED
     try:
         http = tether.listen(position_port)
     except OSError as exc:
@@ -70,7 +74,7 @@ def run(args: argparse.Namespace) -> int:
             f"position: {exc.strerror or exc}. --position-port N serves it on another port.",
             file=sys.stderr,
         )
-        return EXIT_FAILED
+        return EXIT_REFUSED
 
     def log(line: str) -> None:
         print(line, file=sys.stderr, flush=True)
@@ -88,7 +92,7 @@ def run(args: argparse.Namespace) -> int:
                 listener.close()
                 http.close()
                 print(f"error: cannot listen on {socket_path}: {why}.", file=sys.stderr)
-                return EXIT_FAILED
+                return EXIT_REFUSED
             hint = (
                 f" Its directory comes from {geoclue.TMPFILES}; `sudo systemd-tmpfiles "
                 f"--create {geoclue.TMPFILES}` makes it."

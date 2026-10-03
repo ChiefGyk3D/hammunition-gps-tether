@@ -35,6 +35,7 @@ def test_the_user_unit_has_what_a_user_service_needs() -> None:
     assert re.search(r"^ExecStart=\S*hammunition-gps-tether$", unit, re.M)
     assert "Restart=on-failure" in unit and "RestartSec=5" in unit
     assert "WantedBy=default.target" in unit
+    assert re.search(r"^RestartPreventExitStatus=3$", unit, re.M), "refusals exit 3, crashes 1"
     assert "User=" not in unit, "a user unit runs as the user; User= is for system units"
 
 

@@ -10,8 +10,14 @@ Notable changes, newest first. Versions follow
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-02
+
 ### Changed
 
+- Every refusal (a port or socket already in use, run as root, an unusable
+  `--gpsd` or option value) now exits 3; an uncaught crash still exits 1 and
+  argparse's usage error 2. The user unit's `RestartPreventExitStatus` is 3, not
+  1, so systemd stops retrying refusals and keeps retrying crashes.
 - Clarify the README's pip/pipx service and Hammunition engine install paths.
 
 ## [0.1.0] - 2026-10-01

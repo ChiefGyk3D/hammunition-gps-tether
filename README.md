@@ -44,10 +44,19 @@ Ctrl-C stops it. Options:
 It prints where to connect. In QMapShack: Realtime, Add source, *GPS TCP/IP*;
 host `127.0.0.1`, port `10110`.
 
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | stopped cleanly (Ctrl-C or SIGTERM) |
+| 1 | an uncaught crash, a bug; the unit retries it every 5 s |
+| 2 | a usage error: an unknown flag or a missing value (argparse's own) |
+| 3 | a refusal, with its one-line message: port 10110 or 10111 or the unix socket already in use, run as root, an unusable `--gpsd`, `--port` or `--position-port` value, opposite socket options; the unit does not retry it |
+
 ## Run it as a service
 
-`systemd/hammunition-gps-tether.service` is a user unit (`Restart=on-failure`,
-started at login). It runs `%h/.local/bin/hammunition-gps-tether`, where
+`systemd/hammunition-gps-tether.service` is a user unit (`Restart=on-failure`
+and `RestartPreventExitStatus=3`, started at login). It runs `%h/.local/bin/hammunition-gps-tether`, where
 `pipx install` or `pip install --user` puts the program. This unit is for a
 pip/pipx installation; the engine's install does not use it.
 
