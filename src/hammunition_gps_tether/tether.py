@@ -411,6 +411,9 @@ def listen_unix(
     try:
         listener.bind(path)
         bound = True
+        # 0660 is the point: the geoclue group reads the socket (D-069), and the directory is
+        # root's tmpfiles line's, mode 0750. No other account can reach it.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         os.chmod(path, SOCKET_MODE)
         st = os.lstat(path)
         listener.listen(8)
