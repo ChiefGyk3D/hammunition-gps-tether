@@ -660,6 +660,9 @@ def serve(
                 count = client.sock.send(client.pending)
                 client.pending = client.pending[count:]
         except BlockingIOError:
+            # The client's receive buffer is full. Not an error: what is left
+            # stays in client.pending, and want_write below asks the selector
+            # to call back when the socket drains (or drops it past the limit).
             pass
         except OSError:
             drop(client, "A client disconnected")

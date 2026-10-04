@@ -10,6 +10,12 @@ Notable changes, newest first. Versions follow
 
 ## [Unreleased]
 
+### Changed
+
+- CodeQL sweep: the tests import the module once, an IPv6 test can no longer reach
+  its assertions without a gpsd, and the two swallowed errors say why. Adds
+  `SECURITY.md` and Dependabot for actions and pip.
+
 ## [0.1.1] - 2026-10-02
 
 ### Changed

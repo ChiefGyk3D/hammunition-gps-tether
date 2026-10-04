@@ -22,6 +22,7 @@ from typing import Any
 
 import pytest
 
+from hammunition_gps_tether import tether as tether_module
 from hammunition_gps_tether.tether import (
     GPSD,
     HOST,
@@ -92,9 +93,7 @@ def test_southern_and_western_hemispheres_and_missing_fields_are_empty() -> None
 def test_no_time_takes_the_system_clock_in_utc_and_minutes_never_reach_60(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import hammunition_gps_tether.tether as tether
-
-    monkeypatch.setattr(tether, "_now", lambda: datetime(2026, 3, 4, 5, 6, 7, 890_000, UTC))
+    monkeypatch.setattr(tether_module, "_now", lambda: datetime(2026, 3, 4, 5, 6, 7, 890_000, UTC))
     tpv = {"class": "TPV", "mode": 2, "lat": 10.99999999, "lon": 0.0}
     assert sentences(tpv) == [
         b"$GPRMC,050607.89,A,1100.0000,N,00000.0000,E,,,040326,,,A*58\r\n",
@@ -103,9 +102,7 @@ def test_no_time_takes_the_system_clock_in_utc_and_minutes_never_reach_60(
 
 
 def test_the_clock_fallback_is_utc_whatever_the_local_zone() -> None:
-    import hammunition_gps_tether.tether as tether
-
-    now = tether._now()
+    now = tether_module._now()
     assert now.utcoffset() == timedelta(0)
     assert abs((now - datetime.now(UTC)).total_seconds()) < 5
 
@@ -138,9 +135,7 @@ def test_no_fix_or_no_usable_position_gives_no_sentence(tpv: dict[str, Any]) -> 
 def test_a_malformed_time_takes_the_clock_and_a_bad_speed_is_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import hammunition_gps_tether.tether as tether
-
-    monkeypatch.setattr(tether, "_now", lambda: datetime(2026, 3, 4, 5, 6, 7, 890_000, UTC))
+    monkeypatch.setattr(tether_module, "_now", lambda: datetime(2026, 3, 4, 5, 6, 7, 890_000, UTC))
     rmc, gga = sentences({**FIX_3D, "time": "yesterday", "speed": "fast"})
     assert rmc.startswith(b"$GPRMC,050607.89,A,1230.0000,N,03445.0000,E,,90.0,040326,")
     assert gga.startswith(b"$GPGGA,050607.89,1230")
@@ -370,6 +365,8 @@ class FakeGpsd:
                             self.closed_by_tether += 1
                             return
                     except TimeoutError:
+                        # Nothing arrived within the socket timeout: the tether is
+                        # still connected, so go on to the repeat write below.
                         pass
                     if self.repeat:
                         self._write(conn)
@@ -625,13 +622,16 @@ def test_a_remote_gpsd_on_ipv6_is_reached() -> None:
         gpsd = FakeGpsd(_json({"class": "VERSION"}, FIX_3D), family=socket.AF_INET6)
     except OSError:
         pytest.skip("no ::1 on this machine")
-    with (
-        _tether_on(gpsd) as (port, _),
-        socket.create_connection(("127.0.0.1", port), timeout=5) as client,
-    ):
-        rmc, gga = _read_lines(client, 2)
-    assert rmc.startswith(b"$GPRMC,140509.25,A,") and gga.startswith(b"$GPGGA,")
-    assert gpsd.received == [WATCH]
+    else:
+        # Every path that reaches the assertions has a gpsd: skip raises, and
+        # the else clause is the only place it is used.
+        with (
+            _tether_on(gpsd) as (port, _),
+            socket.create_connection(("127.0.0.1", port), timeout=5) as client,
+        ):
+            rmc, gga = _read_lines(client, 2)
+        assert rmc.startswith(b"$GPRMC,140509.25,A,") and gga.startswith(b"$GPGGA,")
+        assert gpsd.received == [WATCH]
 
 
 @pytest.mark.parametrize("tether", [_json({"class": "VERSION"})], indirect=True)
