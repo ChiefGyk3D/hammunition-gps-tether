@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (C) 2026 Renegade Penguin LLC
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# ruff, ruff format, mypy --strict and pytest on 3.11 to 3.13. The jobs live
-# in ChiefGyk3D/git-your-ship-together; its `CI green` job is the one check
-# branch protection watches (`ci / CI green`).
+# ruff, ruff format, mypy --strict and pytest on 3.11 to 3.13, and the Atheris
+# fuzz targets. The jobs live in ChiefGyk3D/git-your-ship-together; its
+# `CI green` job is the one check branch protection watches (`ci / CI green`).
 name: CI
 
 on:
@@ -11,6 +11,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "43 5 * * 1"   # the weekly long fuzz run
   workflow_dispatch:
 
 permissions:
@@ -22,7 +24,7 @@ concurrency:
 
 jobs:
   ci:
-    uses: ChiefGyk3D/git-your-ship-together/.github/workflows/python-ci.yml@34536f91c5207effb397d065e6bb98cc348c6e2b # v1.5.0
+    uses: ChiefGyk3D/git-your-ship-together/.github/workflows/python-ci.yml@9708d9d43bf0c27b8269c2387edc70c1efb22514 # v1.9.0
     permissions:
       contents: read
       id-token: write   # Doppler OIDC, when a Doppler identity is configured
@@ -35,9 +37,23 @@ jobs:
         pip install -e ".[dev]"
       test-command: pytest -W error::DeprecationWarning
       lint-install-command: pip install -e ".[dev]"
-      lint-command: ruff check --output-format=github src tests && ruff format --check src tests && mypy
+      lint-command: ruff check --output-format=github src tests fuzz && ruff format --check src tests fuzz && mypy
       docker-build: false
       egress-policy: block
       doppler-project: ci
       doppler-config: ci
       doppler-identity-id: ${{ vars.DOPPLER_IDENTITY_ID }}
+
+  # Atheris targets under fuzz/ (gpsd's JSON stream, the NMEA sentence builder,
+  # the GET /position request head, the command-line values), run by GYST: 30
+  # seconds each on a pull request, 10 minutes each on the Monday schedule. A
+  # crash fails the job; the input is the fuzz-findings artifact.
+  fuzz:
+    uses: ChiefGyk3D/git-your-ship-together/.github/workflows/python-fuzz.yml@b4dec64ea0efba8b0604339e283adb25da6fd430 # v1.10.0
+    permissions:
+      contents: read
+    with:
+      seconds-per-target: ${{ github.event_name == 'schedule' && 600 || 30 }}
+      timeout-minutes: ${{ github.event_name == 'schedule' && 60 || 30 }}
+      install-command: pip install -e .
+      egress-policy: block
