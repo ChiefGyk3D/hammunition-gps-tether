@@ -1020,3 +1020,34 @@ def test_the_instructions_name_the_socket_when_there_is_one() -> None:
     text = instructions(nmea_socket="/run/hammunition-gps/nmea.sock")
     assert "/run/hammunition-gps/nmea.sock" in text and "GeoClue" in text
     assert "nmea.sock" not in instructions()
+
+
+# Findings of the Atheris targets in fuzz/. Each is the value the fuzzer reached,
+# written out: a fuzz input is a byte string shaped for FuzzedDataProvider.
+
+
+@pytest.mark.parametrize("when", ["0001-01-01T00:00:00+05:00", "9999-12-31T23:59:59-05:00"])
+def test_a_time_at_the_calendar_edge_takes_the_clock_not_an_overflow(
+    monkeypatch: pytest.MonkeyPatch, when: str
+) -> None:
+    # astimezone(UTC) raised OverflowError, which ended the tether's whole loop.
+    monkeypatch.setattr(tether_module, "_now", lambda: datetime(2026, 3, 4, 5, 6, 7, 890_000, UTC))
+    rmc, _ = sentences({**FIX_3D, "time": when})
+    assert rmc.startswith(b"$GPRMC,050607.89,A,")
+
+
+@pytest.mark.parametrize("speed", [1.7e308, -1.7e308])
+def test_a_speed_that_overflows_in_knots_is_empty_not_inf(speed: float) -> None:
+    # A finite m/s that is infinite once converted to knots printed "inf" in the sentence.
+    rmc, gga = sentences({**FIX_3D, "speed": speed})
+    assert b"inf" not in rmc and b"inf" not in gga
+    assert rmc.split(b",")[7] == b""
+
+
+def test_an_origin_with_a_non_ascii_digit_is_refused_not_a_crash() -> None:
+    # "²".isdigit() is true and the head is decoded as latin-1, so this origin passed
+    # the loopback check and then failed to encode into the response.
+    head = b"GET /position HTTP/1.1\r\nHost: 127.0.0.1:10111\r\nOrigin: http://127.0.0.1:\xb2\r\n"
+    answer, streaming = tether_module.position_response(head, 10111)
+    assert not streaming
+    assert answer.startswith(b"HTTP/1.1 403 ")

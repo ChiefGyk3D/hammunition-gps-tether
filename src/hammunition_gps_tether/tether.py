@@ -154,15 +154,20 @@ def _time_fields(value: object) -> tuple[str, str]:
             when = datetime.fromisoformat(value)
         except ValueError:
             when = None
+    if when is not None and when.tzinfo is not None:
+        try:
+            when = when.astimezone(UTC)
+        except OverflowError:  # an offset that pushes the date past year 1 or 9999
+            when = None
     if when is None:
         when = _now()
-    elif when.tzinfo is not None:
-        when = when.astimezone(UTC)
     return f"{when:%H%M%S}.{when.microsecond // 10_000:02d}", f"{when:%d%m%y}"
 
 
 def _fixed(value: float | None, places: int) -> str:
-    return "" if value is None else f"{value:.{places}f}"
+    """The field, or empty (unknown) for no value or one that is not finite: a
+    finite speed in m/s can overflow once it is converted to knots."""
+    return "" if value is None or not math.isfinite(value) else f"{value:.{places}f}"
 
 
 def sentences(
@@ -406,6 +411,8 @@ def listen_unix(
     try:
         listener.bind(path)
         bound = True
+        # 0660 is the point: the geoclue group reads the socket (D-069).
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         os.chmod(path, SOCKET_MODE)
         st = os.lstat(path)
         listener.listen(8)
@@ -464,7 +471,10 @@ def _loopback_origin(origin: str) -> bool:
     for base in (f"http://{HOST}", "http://localhost"):
         if origin == base:
             return True
-        if origin.startswith(base + ":") and origin[len(base) + 1 :].isdigit():
+        port = origin[len(base) + 1 :]
+        # ASCII digits only: str.isdigit() is also true for "\u00b2", which the
+        # head's latin-1 decoding can produce and which cannot go back out as ASCII.
+        if origin.startswith(base + ":") and port.isascii() and port.isdigit():
             return True
     return False
 

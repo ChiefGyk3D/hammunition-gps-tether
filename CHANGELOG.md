@@ -10,7 +10,27 @@ Notable changes, newest first. Versions follow
 
 ## [Unreleased]
 
+### Added
+
+- Fuzzing: Atheris targets under `fuzz/` for gpsd's JSON stream, the NMEA sentence
+  builder, the `GET /position` request head and the command-line values, run by
+  GYST's `python-fuzz.yml` (v1.10.0) from `ci.yml` on pull requests and weekly;
+  `tests/test_fuzz_targets.py` keeps them honest. See the README.
+
+### Fixed
+
+- Found by the fuzz targets: a gpsd time at the calendar's edge with an offset
+  (`0001-01-01T00:00:00+05:00`) raised `OverflowError` and ended the tether's loop;
+  it now takes the system clock like any unreadable time. A speed that overflows
+  to infinity in knots printed `inf` in the RMC sentence; the field is now empty.
+  A `GET /position` whose `Origin` ended in a non-ASCII digit (`http://127.0.0.1:\u00b2`)
+  passed the loopback check and then raised `UnicodeEncodeError` while the response
+  was built, ending the loop; it is refused with 403.
+
 ### Changed
+
+- The GYST callers (`ci.yml`, `security.yml`) move from v1.5.0 to v1.10.0; every
+  input they pass still exists there (diffed).
 
 - CodeQL sweep: the tests import the module once, an IPv6 test can no longer reach
   its assertions without a gpsd, and the two swallowed errors say why. Adds

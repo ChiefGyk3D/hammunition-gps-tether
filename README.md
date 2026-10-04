@@ -99,6 +99,27 @@ make check
 `make check` is ruff, `mypy --strict` and pytest, which CI runs too. The suite
 blocks every socket but loopback; every coordinate in it is synthetic.
 
+### Fuzzing
+
+`fuzz/fuzz_*.py` are [Atheris](https://github.com/google/atheris) targets for what
+the tether reads from outside: gpsd's JSON stream, the NMEA sentence builder's
+coordinate and time inputs, the head of `GET /position` (the one request a web
+page can send it), and the `--port` and `--gpsd` values. CI runs each for 30
+seconds on a pull request and 10 minutes on Mondays, through GYST's
+`python-fuzz.yml`. Atheris has wheels for CPython 3.12 to 3.14 on x86_64 only;
+`make venv` installs it there. To run one:
+
+```
+.venv/bin/python fuzz/fuzz_position_request.py -max_total_time=60 -max_len=4096
+```
+
+A crash prints the exception and writes a `crash-<sha>` file (in CI, the
+`fuzz-findings` artifact). Turn the input into an ordinary pytest test, watch it
+fail, fix the tether at the root cause, and keep the test. A parser's documented
+refusal (`ValueError` from a flag value) is caught inside the target; anything
+else is the bug. `tests/test_fuzz_targets.py` feeds every target a few seeds in
+the normal suite, so a target cannot rot unnoticed.
+
 ## Credits
 
 The tether comes from [Hammunition](https://github.com/ChiefGyk3D/Hammunition)
