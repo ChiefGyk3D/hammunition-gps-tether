@@ -29,8 +29,8 @@ Notable changes, newest first. Versions follow
 
 ### Changed
 
-- The GYST callers (`ci.yml`, `security.yml`) move from v1.5.0 to v1.9.0; every
-  input they pass still exists there.
+- The GYST callers (`ci.yml`, `security.yml`) move from v1.5.0 to v1.10.0; every
+  input they pass still exists there (diffed).
 
 - CodeQL sweep: the tests import the module once, an IPv6 test can no longer reach
   its assertions without a gpsd, and the two swallowed errors say why. Adds
