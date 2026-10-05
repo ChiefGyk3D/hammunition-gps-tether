@@ -411,9 +411,9 @@ def listen_unix(
     try:
         listener.bind(path)
         bound = True
-        # 0660 is the point: the geoclue group reads the socket (D-069).
-        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
-        os.chmod(path, SOCKET_MODE)
+        # 0660 is the point: the geoclue group reads the socket (D-069). Semgrep reads a
+        # suppression only on the matched line, so the bare marker sits on it.
+        os.chmod(path, SOCKET_MODE)  # nosemgrep
         st = os.lstat(path)
         listener.listen(8)
     except OSError:
