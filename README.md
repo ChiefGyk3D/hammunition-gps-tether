@@ -94,6 +94,15 @@ GeoClue files (a `conf.d` drop-in and a tmpfiles line for the socket's
 directory) are written by `hammunition hardware apply`, not by this program,
 which only reads the drop-in to decide whether the socket is on by default.
 
+The engine's unit is not a copy of this repository's: it is rendered from the
+catalog's `user_services` fields and also carries `StartLimitIntervalSec=30`,
+`StartLimitBurst=5` and `NoNewPrivileges=yes`, with the same
+`Restart=on-failure`, `RestartSec=5` and `RestartPreventExitStatus=3`. The
+engine's install puts no `hammunition-gps-tether` command on your `PATH`; the
+program is the installed tree, which the service and
+`hammunition maps gps-tether` run, and the flags above go to the latter. The
+engine's unit passes none, and an engine reinstall replaces it whole.
+
 ## Develop
 
 ```
