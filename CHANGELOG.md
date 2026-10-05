@@ -10,6 +10,10 @@ Notable changes, newest first. Versions follow
 
 ## [Unreleased]
 
+### Changed
+
+- Code scanning, second pass: the Semgrep marker on the deliberate 0660 GeoClue socket `chmod` (D-069) is the bare `# nosemgrep` on the matched line.
+
 ### Added
 
 - Fuzzing: Atheris targets under `fuzz/` for gpsd's JSON stream, the NMEA sentence
