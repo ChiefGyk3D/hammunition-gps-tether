@@ -2,7 +2,7 @@
 
 Serves gpsd's position as NMEA on 127.0.0.1 (10110), the browser map's
 `/position` SSE stream (10111) and an optional unix socket for GeoClue. A
-separable component of [Hammunition](https://github.com/ChiefGyk3D/Hammunition):
+separable component of [Hammunition](https://github.com/Renegade-Penguin/Hammunition):
 its own repository and releases; the engine installs it as a catalog unit.
 
 Binary: `hammunition-gps-tether`. Package: `hammunition_gps_tether` (src

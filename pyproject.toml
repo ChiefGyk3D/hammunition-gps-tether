@@ -28,8 +28,8 @@ dev = [
 hammunition-gps-tether = "hammunition_gps_tether.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ChiefGyk3D/hammunition-gps-tether"
-Engine = "https://github.com/ChiefGyk3D/Hammunition"
+Homepage = "https://github.com/Renegade-Penguin/hammunition-gps-tether"
+Engine = "https://github.com/Renegade-Penguin/Hammunition"
 
 [tool.setuptools.dynamic]
 version = { attr = "hammunition_gps_tether.__version__" }
