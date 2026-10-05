@@ -24,6 +24,7 @@ Notable changes, newest first. Versions follow
 
 ### Fixed
 
+- `--gpsd [ADDR%SCOPE]` refused nothing in a scope id: Python's `IPv6Address` accepts any character but `%` after the `%`, so a host with `\r`, NUL or DEL passed the bracket branch while the plain-host branch refused whitespace. Whitespace and control characters are now refused by name; `fe80::1%eth0` still works. Found by the CI fuzz job on PR #7.
 - Found by the fuzz targets: a gpsd time at the calendar's edge with an offset
   (`0001-01-01T00:00:00+05:00`) raised `OverflowError` and ended the tether's loop;
   it now takes the system clock like any unreadable time. A speed that overflows

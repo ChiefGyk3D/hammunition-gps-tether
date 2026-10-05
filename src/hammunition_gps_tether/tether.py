@@ -322,6 +322,11 @@ def gpsd_address(text: str) -> tuple[str, int]:
             raise ValueError(
                 f"--gpsd {text}: {host} is not an IPv6 address; brackets are for one"
             ) from None
+        if any(c.isspace() or ord(c) < 0x20 or ord(c) == 0x7F for c in host):
+            # IPv6Address takes anything but % after a scope id's %, controls included.
+            raise ValueError(
+                f"--gpsd {text!r}: an IPv6 scope id has no whitespace or control characters"
+            )
         if rest and not rest.startswith(":"):
             raise ValueError(f"--gpsd {text}: after ] comes nothing, or :PORT")
     elif where.count(":") > 1:
