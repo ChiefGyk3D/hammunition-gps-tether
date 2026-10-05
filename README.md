@@ -2,7 +2,7 @@
 
 Serves your GPS receiver's position, from [gpsd](https://gpsd.io/), as NMEA on
 127.0.0.1 only, for programs that cannot talk to gpsd themselves: QMapShack's
-*GPS TCP/IP* source, [Hammunition](https://github.com/ChiefGyk3D/Hammunition)'s
+*GPS TCP/IP* source, [Hammunition](https://github.com/Renegade-Penguin/Hammunition)'s
 offline browser map, and GeoClue (so CoMaps knows where you are). Standard
 library only, runs as you, never as root, GPL-3.0-or-later.
 
@@ -122,7 +122,7 @@ the normal suite, so a target cannot rot unnoticed.
 
 ## Credits
 
-The tether comes from [Hammunition](https://github.com/ChiefGyk3D/Hammunition)
+The tether comes from [Hammunition](https://github.com/Renegade-Penguin/Hammunition)
 (Renegade Penguin LLC), where its decisions are recorded (D-061, D-069, D-071).
 
 ---

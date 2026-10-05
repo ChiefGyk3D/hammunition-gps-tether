@@ -9,7 +9,7 @@ The latest tagged release is supported (currently v0.1.1). Fixes land on
 
 Please report security issues **privately**, not in a public issue or pull
 request. Use GitHub's private vulnerability reporting on this repository:
-[Report a vulnerability](https://github.com/ChiefGyk3D/hammunition-gps-tether/security/advisories/new).
+[Report a vulnerability](https://github.com/Renegade-Penguin/hammunition-gps-tether/security/advisories/new).
 
 Please include the flags you ran it with, what you expected and what
 happened, and the steps to reproduce it. Do not include a callsign, grid

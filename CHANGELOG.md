@@ -12,6 +12,7 @@ Notable changes, newest first. Versions follow
 
 ### Changed
 
+- The project moved from the `ChiefGyk3D` user to the `Renegade-Penguin` organization (Hammunition #359, epic #357): every suite repository URL, badge and link now points at the organization.
 - GYST callers to v1.12.0 (every input they pass exists in v1.12.0; v1.11.0 to v1.12.0 changed only `project-sync.yml`).
 - Code scanning, second pass: the Semgrep marker on the deliberate 0660 GeoClue socket `chmod` (D-069) is the bare `# nosemgrep` on the matched line.
 
