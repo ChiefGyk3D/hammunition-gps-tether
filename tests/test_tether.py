@@ -223,6 +223,7 @@ def test_the_instructions_name_the_options_the_gpsd_and_another_port() -> None:
         ("[::1]", ("::1", 2947)),
         ("[2001:db8::7]:3000", ("2001:db8::7", 3000)),
         ("[::1]:65535", ("::1", 65535)),
+        ("[fe80::1%eth0]:2947", ("fe80::1%eth0", 2947)),
     ],
 )
 def test_gpsd_takes_a_host_and_an_optional_port(text: str, address: tuple[str, int]) -> None:
@@ -245,6 +246,8 @@ def test_gpsd_takes_a_host_and_an_optional_port(text: str, address: tuple[str, i
         ("pi.local:0", "1 to 65535"),
         ("pi.local:65536", "1 to 65535"),
         ("pi local", "whitespace"),
+        ("[::%\r:\x00:?:\x00:\x06::`:\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f]", "control characters"),
+        ("[::1%\t]", "control characters"),
     ],
 )
 def test_a_gpsd_address_that_is_not_one_is_refused_by_name(text: str, words: str) -> None:
