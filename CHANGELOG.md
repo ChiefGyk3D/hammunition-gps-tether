@@ -12,6 +12,7 @@ Notable changes, newest first. Versions follow
 
 ### Changed
 
+- GYST callers to v1.12.0 (every input they pass exists in v1.12.0; v1.11.0 to v1.12.0 changed only `project-sync.yml`).
 - Code scanning, second pass: the Semgrep marker on the deliberate 0660 GeoClue socket `chmod` (D-069) is the bare `# nosemgrep` on the matched line.
 
 ### Added
