@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   ci:
-    uses: ChiefGyk3D/git-your-ship-together/.github/workflows/python-ci.yml@bcd2cf02a7dfc353d084ffd9c4d7ccd00b5f25c7 # v1.18.0
+    uses: ChiefGyk3D/git-your-ship-together/.github/workflows/python-ci.yml@faba0b7d1ab65e9033bef1acfa93d6d57b5808c0 # v1.21.0
     permissions:
       contents: read
       id-token: write   # Doppler OIDC, when a Doppler identity is configured
@@ -49,7 +49,7 @@ jobs:
   # seconds each on a pull request, 10 minutes each on the Monday schedule. A
   # crash fails the job; the input is the fuzz-findings artifact.
   fuzz:
-    uses: ChiefGyk3D/git-your-ship-together/.github/workflows/python-fuzz.yml@bcd2cf02a7dfc353d084ffd9c4d7ccd00b5f25c7 # v1.18.0
+    uses: ChiefGyk3D/git-your-ship-together/.github/workflows/python-fuzz.yml@faba0b7d1ab65e9033bef1acfa93d6d57b5808c0 # v1.21.0
     permissions:
       contents: read
     with:
